@@ -4763,12 +4763,12 @@ function renderHistoryPage() {
     const endIdx = Math.min(startIdx + historyPerPage, gameHistory.length);
     const pageMoves = gameHistory.slice(startIdx, endIdx);
     
-    // === RED vs BLUE SUBTITLE (red always on the left) ===
+    // === RED vs BLUE SUBTITLE ===
 const difficultyNames = ['GENIUS', 'ADVANCED', 'INTERMEDIATE', 'BEGINNER'];
 const aiLevelName   = difficultyNames[l] || 'GENIUS';
 const playerDisplay = (playerName && playerName !== "YOU") ? playerName : "YOU";
 
-// Red side is ALWAYS on the left, Blue side ALWAYS on the right
+// Red side ALWAYS on the left, Blue side ALWAYS on the right
 let redText, blueText;
 if (side === 0) {
     redText  = playerDisplay;
@@ -4783,13 +4783,16 @@ ctx.font = 'bold 12px fantasy, papyrus';
 ctx.textAlign = 'left';
 ctx.textBaseline = 'middle';
 
-const centerY = 51;
-const prefix  = '⚔️ ';
-const vsPart  = ' vs ';
+const centerY  = 51;
+const prefix   = '⚔️ ';
+const redPart  = `${redText} (${redGoal}) `;
+const vsPart   = 'vs';
+const bluePart = ` (${blueGoal}) ${blueText}`;
+
 const wPrefix = ctx.measureText(prefix).width;
-const wRed    = ctx.measureText(redText).width;
+const wRed    = ctx.measureText(redPart).width;
 const wVs     = ctx.measureText(vsPart).width;
-const wBlue   = ctx.measureText(blueText).width;
+const wBlue   = ctx.measureText(bluePart).width;
 let cursorX = 170 - (wPrefix + wRed + wVs + wBlue) / 2;
 
 ctx.fillStyle = '#CFC';
@@ -4797,7 +4800,7 @@ ctx.fillText(prefix, cursorX, centerY);
 cursorX += wPrefix;
 
 ctx.fillStyle = '#FF4444';
-ctx.fillText(redText, cursorX, centerY);
+ctx.fillText(redPart, cursorX, centerY);
 cursorX += wRed;
 
 ctx.fillStyle = '#CFC';
@@ -4805,7 +4808,7 @@ ctx.fillText(vsPart, cursorX, centerY);
 cursorX += wVs;
 
 ctx.fillStyle = '#4488FF';
-ctx.fillText(blueText, cursorX, centerY);
+ctx.fillText(bluePart, cursorX, centerY);
 
 ctx.restore();
     
