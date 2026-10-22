@@ -1,10 +1,9 @@
-// ============================================================
-// MATHSOCCER SERVICE WORKER
-// GitHub: Okonprincewill/MATHSOCCER-4aSide-
-// ============================================================
+// MathSoccer Service Worker
+// Mathsoccer repo - offline PWA version
 
-const CACHE_NAME = 'mathsoccer-v19';
-const APP_ROOT = '/MATHSOCCER-4aSide-/';
+const CACHE_NAME = 'mathsoccer-v17-audio';
+
+const APP_ROOT = '/Mathsoccer-hva/';
 
 // ✅ FILES TO CACHE - NO APP_ROOT ALONE!
 const FILES_TO_CACHE = [
@@ -28,7 +27,7 @@ const AUDIO_FILES = [
     APP_ROOT + 'cheer_goal.mp3',
     APP_ROOT + 'crowd_louds.mp3',
     APP_ROOT + 'Mathsoccer_cool.mp3',
-    APP_ROOT + 'maths.mp3',
+    APP_ROOT + 'maths.mp3',    
     APP_ROOT + 'disappointed.mp3'
 ];
 
