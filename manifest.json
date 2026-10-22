@@ -1,10 +1,10 @@
 {
-  "id": "/Mathsoccer-hva/",
+  "id": "/MATHSOCCER-hva/",
   "name": "Mathsoccer - AI does the math. You watch the balance.",
   "short_name": "Mathsoccer",
   "description": "The world's first balance simulation and factor handoff system based on the law of imbalance. AI does the math. You do the balance.",
-  "start_url": "/Mathsoccer-hva/",
-  "scope": "/Mathsoccer-hva/",
+  "start_url": "/MATHSOCCER-hva/",
+  "scope": "/MATHSOCCER-hva/",
   "display": "standalone",
   "display_override": [
     "standalone",
