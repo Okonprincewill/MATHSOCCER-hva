@@ -9367,52 +9367,53 @@ function showCalculationAnimation(calculationText, teamColor) {
 // FIXED DISPLAY GENERATION WITH CAPITALIZATION
 // ===========================================
 function generateNextTurnDisplay() {
-    const turnNumber = m;
+
+    // ----------------------------------------------------------
+    // DIFFICULTY LABEL
+    // ----------------------------------------------------------
+    const difficultyNames = ['Genius', 'Advanced', 'Intermediate', 'Beginner'];
+    const diffName = difficultyNames[l] || 'Genius';
+
+    // ----------------------------------------------------------
+    // va — MOVE MADE (color + difficulty + token + from → to)
+    // ----------------------------------------------------------
     
-    if (lastMoveData) {
-        const { button, targetCell, sourceCell, chanceType, points, moveTeam, nextTeam } = lastMoveData;
+    if (lastMoveData &&
+        lastMoveData.button) {
+const colorWord = lastMoveData.moveTeam === 'red' ? 'Red' : 'Blue';
+        const btn  = lastMoveData.button.id;
         
- 
-        const fromValue = sourceCell ? sourceCell.id : "?";
-        const toValue = targetCell.id;
-        const buttonLabel = button.id;
-        const pointsText = points === 1 ? "1pt" : `${points}pts`;
-        
-        // Capitalize chance type and team
-        const capitalizedChance = capitalizeFirst(chanceType);
-        const capitalizedTeam = capitalizeFirst(moveTeam);
-        const capitalizedNextTeam = capitalizeFirst(nextTeam);
-        
-        // Line 1: Move outcome with capitals
-        va = `${capitalizedTeam} button ${buttonLabel} moved from ${fromValue} to ${toValue}.`;
-        
-        // Line 2: Points and next turn with capital
-        vb = `${capitalizedChance}. ${pointsText}. It's ${nextTeam} turn ${turnNumber}.`;
-        
-        // Get curAns for next player
-        if (typeof valAns === 'function') valAns();
-        
-        // Generate valid links for next player
-        const nextLinks = generateLinksForTeam(nextTeam);
-        const formatLink = (id, arr) => arr.length > 0 ? `${id}(${arr.join(', ')})` : `${id}(no link)`;
-        
-        if(h===1 && g===2){
-        // Line 3: Header with capital
-        vc = `Valid ${nextTeam} links:`;
-        
-        // Lines 4-7: Button links
-        vd = formatLink('W', nextLinks.W);
-        ve = formatLink('X', nextLinks.X);
-        vf = formatLink('Y', nextLinks.Y);
-        vg = formatLink('Z', nextLinks.Z);
-        vh = nextTeam;  // Keep original case for color
-        //speakText(va);
+        va = `${colorWord} ${diffName} token ${btn} moved `;
     } 
-    else{
+
+    // ----------------------------------------------------------
+    // vb — POINTS + CHANCE
+    // ----------------------------------------------------------
+    if (lastMoveData &&
+        lastMoveData.sourceCell &&
+        lastMoveData.targetCell &&
+        lastMoveData.button) {
+        const pts = lastMoveData.points || 0;
+        
+        const from = lastMoveData.sourceCell.id;
+        const to   = lastMoveData.targetCell.id;
+        let chance = 'No chance';
+        if (pts === 10)      chance = 'Goal';
+        else if (pts === 5)  chance = 'Full chance';
+        else if (pts === 3)  chance = 'Half chance';
+        else if (pts === 2)  chance = 'Block';
+        else                 chance = 'No chance';
+
+        vb = `from ${from} to ${to}. ${chance}. ${pts}pt${pts === 1 ? '' : 's'}.`;
+    } else {
+    const colorWord = lastMoveData.moveTeam === 'red' ? 'Red' : 'Blue';
+        vb = '${colorWord} ${diffName} starts.';
+    }
+
     // ----------------------------------------------------------
     // vc — DECISION LOOP TITLE
-    // ----------------------------------------------------------    
-    vc = lastMoveData ? 'AI DECISION LOOP' : 'AI DECISION LOOP';
+    // ----------------------------------------------------------
+    vc = lastMoveData ? 'DECISION LOOP' : 'DECISION LOOP';
 
 // ----------------------------------------------------------
 // SOURCE LISTS — from the snapshot taken at decision time
@@ -9429,9 +9430,9 @@ vd = `Linked numbers: ${validList.length ? validList.join(', ') : 'none'}`;
 ve = `Unsafe numbers: ${noGoList.length ? noGoList.join(', ') : 'none'}`;
 vg = `Busy tokens: ${exemptBtnIds.length ? exemptBtnIds.join(', ') : 'none'}`;
 vf = `Safe numbers: ${safeList.length ? safeList.join(', ') : 'none'}`;
-}
-}
-    
+
+    // vh — team color for statDraw styling
+    vh = (lastMoveData && lastMoveData.moveTeam === 'red') ? 'red' : 'blue';
 }
 
 
