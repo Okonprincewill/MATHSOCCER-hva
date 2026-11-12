@@ -9407,7 +9407,7 @@ const colorWord = lastMoveData.moveTeam === 'red' ? 'Red' : 'Blue';
         vb = `from ${from} to ${to}. ${chance}. ${pts}pt${pts === 1 ? '' : 's'}.`;
     } else {
     const colorWord = lastMoveData.moveTeam === 'red' ? 'Red' : 'Blue';
-        vb = '${colorWord} ${diffName} starts.';
+        vb = `${colorWord} ${diffName} starts.`;
     }
 
     // ----------------------------------------------------------
@@ -11098,7 +11098,7 @@ if (l < 1) {
             // ===========================================
             let newRuleApplies = false;
 
-            if (factorCanReach(blockerCell.id, vulFac) && hasOpponentLink(blockerCell)) {
+            if (factorCanReach(blockerCell.id, vulFac) && isLinkedToCompAns(blockingButton) && hasOpponentLink(blockerCell)) {
     const betweenCell = answer.find(cell =>
         cell.x === positions[3].x &&
         cell.occupancy === 'no' &&
@@ -11184,7 +11184,11 @@ if (l < 1) {
                 factorCanReach(cell.id, vulFac)
             );
             // Is compAns between the blocker and the mid button?
-            const isCompAnsBetween = (isDown) ?
+            const isCompAnsBetween =
+compAns.x === positions[3].x &&
+                compAns.x + 3 === blockingButton.x && compAns.x+ 3 === anyBut.x &&
+                
+(isDown) ?
                 (compAns.y + 3 > blockingButton.y && compAns.y + 3 < anyBut.y) :
                 (compAns.y + 3 < blockingButton.y && compAns.y + 3 > anyBut.y);
 
@@ -11209,15 +11213,19 @@ if (l < 1) {
                     if (hasOpponentLinkToMid) {
 
                         // PREVENTIVE SKIP: compAns physically blocks the path
-                        const compAnsBlocksPath = (isDown)
+                        const compAnsBlocksPath = compAns.x === positions[3].x &&
+                compAns.x + 3 === blockingButton.x && compAns.x + 3 === anyBut.x &&
+(isDown)
                             ? (compAns.y + 3 > positions[3].y && compAns.y + 3 < anyNum.y)
                             : (compAns.y + 3 < positions[3].y && compAns.y + 3 > anyNum.y);
 
-                        if (!compAnsBlocksPath) {
+                        if (compAns.x === positions[3].x &&
+                compAns.x + 3 === blockingButton.x && compAns.x + 3 === anyBut.x && !compAnsBlocksPath) {
 
                             // B4: find blocking cell between own goal and midNum
                             const blockingCell = answer.find(block =>
-                                block.x === positions[3].x && compAns.id !== block.id &&
+                                block.x === positions[3].x &&
+                block.x + 3 === blockingButton.x && block.x + 3 === anyBut.x && compAns.id !== block.id &&
                                 ((dir === "down") ?
                                     (block.y > positions[3].y && block.y + 3 < anyNum.y) :
                                     (block.y < positions[3].y && block.y + 3 > anyNum.y)) && block !== positions[3]
@@ -12099,7 +12107,7 @@ for (let whiteSquare of whiteSquares) {
         continue;
     }
     
-    if (!canBlockAttack(ansList, opponentButton, whiteSquare) && l < 2) {
+    if (!blocksAttack && l < 2) {
         exemptAnswers.add(ansList);
         logExemptedNumber(ansList.id, "to protect "+whiteSquare.id);
     }
@@ -12589,7 +12597,7 @@ else {
             }
             
             if (!defFac || defFac < 1 || defFac > 9) {
-                continue;
+                return;
             }
             
             // RULES #4 & #5: CASCADE EXEMPTIONS
@@ -12825,7 +12833,7 @@ if (positions[4] && positions[5] &&
                     const defFacCanReachWhite1 = (positions[1].id >= defFac && positions[1].id % defFac === 0 && positions[1].id / defFac <= 9) ||
                                                   (positions[1].id < defFac && defFac % positions[1].id === 0);
 
-                    if (!defFac || defFac < 1 || defFac > 81) {
+                    if (!defFac || defFac < 1 || defFac > 9) {
                         continue;
                     }
                     
