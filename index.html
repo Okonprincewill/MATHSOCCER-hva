@@ -3977,7 +3977,7 @@ ctx.fillStyle = playerColor;  // ← Changed from '#FFFFFF'
 
             // ✅ DRAW ASSIST (if it exists)
 if (goal.assist) {
-    ctx.fillStyle = goal.col; // Team colour
+    ctx.fillStyle = '#CFC'; // Team colour
     ctx.font = 'bold 9px fantasy, papyrus';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
@@ -4049,7 +4049,7 @@ redScorerY += scorerSpacing;
 
             // ✅ DRAW ASSIST (if it exists)
 if (goal.assist) {
-    ctx.fillStyle = goal.col; // Team colour
+    ctx.fillStyle = '#CFC'; // Team colour
     ctx.font = 'bold 9px fantasy, papyrus';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
@@ -5420,7 +5420,7 @@ function renderOpponentLogsPage() {
     ctx.font = 'bold 16px fantasy, papyrus';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.fillText('VALID NUMBERS:', 10, yPos);
+    ctx.fillText('SAFE NUMBERS:', 10, yPos);
     yPos += 18;
     
     ctx.fillStyle = '#CFC';
@@ -5976,50 +5976,89 @@ function saveGameState() {
     currentHistoryIndex = moveHistory.length - 1;
     
     if (moveHistory.length > MAX_HISTORY) {
-        moveHistory.shift();
-        currentHistoryIndex--;
-    }
+    moveHistory.shift();
+    currentHistoryIndex = moveHistory.length - 1;
+}
 }
 
-// ===========================================
-// UNDO
-// ===========================================
+// ---- Call this from makeMove() right after lastMoveData is set ----
+// (add one line inside makeMove, just before preAnim():)
+//   saveGameState();
+
 function undoMove() {
-    if (currentHistoryIndex <= 1) {
+    if (animationInProgress) return false;
+    if (matchInProgress) return false;
+    if (currentHistoryIndex <= 0) {
         speakText("Nothing to undo");
         return false;
     }
-    
-    // ✅ Store current state before undoing (for redo to work properly)
-    // saveGameState(); // Only if you want to save the current state before undo  
-    restoreState(currentHistoryIndex);
+
+    cancelAllTimers();            // stop pending AI / anim timers
+
     currentHistoryIndex--;
-    renderStats();
-    drawToggles();
-    generateNextTurnDisplay();
-    statDraw(va, vb, vc, vd, ve, vf, vg, vh);
-    speakText(`Undo to move ${moveHistory[currentHistoryIndex].n-1}`);
+    restoreState(currentHistoryIndex);
+
+    renderAfterRestore();
+
+    // Re-arm AI if it's now the AI's turn
+    if (!matchInProgress && h === 0 && n < 28 && !gameOverActive) {
+        timerCom = setTimeout(compMove, 3000);
+    }
+
+    speakText(`Undo to move ${moveHistory[currentHistoryIndex].n - 1}`);
     return true;
 }
 
-// ===========================================
-// REDO
-// ===========================================
 function redoMove() {
+    if (animationInProgress) return false;
+    if (matchInProgress) return false;
     if (currentHistoryIndex >= moveHistory.length - 1) {
         speakText("Nothing to redo");
         return false;
-    }       
-    restoreState(currentHistoryIndex);
+    }
+
+    cancelAllTimers();
+
     currentHistoryIndex++;
-    renderStats();
-    drawToggles();
-    generateNextTurnDisplay();
-    statDraw(va, vb, vc, vd, ve, vf, vg, vh);
-    speakText(`Redo to move ${moveHistory[currentHistoryIndex].n-1}`);
+    restoreState(currentHistoryIndex);
+
+    renderAfterRestore();
+
+    if (!matchInProgress && h === 0 && n < 28 && !gameOverActive) {
+        timerCom = setTimeout(compMove, 3000);
+    }
+
+    speakText(`Redo to move ${moveHistory[currentHistoryIndex].n - 1}`);
     return true;
 }
 
+function cancelAllTimers() {
+    if (timerCom) { clearTimeout(timerCom); timerCom = null; }
+    if (autoMoveTimer) { clearTimeout(autoMoveTimer); autoMoveTimer = null; }
+    if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
+    if (pulseFrameId) { cancelAnimationFrame(pulseFrameId); pulseFrameId = null; }
+    if (calcAnimationFrameId) { cancelAnimationFrame(calcAnimationFrameId); calcAnimationFrameId = null; }
+    realTimeouts.forEach(e => clearTimeout(e.id));
+    realTimeouts = [];
+    pendingDelays.forEach(e => clearTimeout(e.id));
+    pendingDelays = [];
+    animationInProgress = false;
+    touchEnabled = true;
+    pulseAnimationActive = false;
+    calcAnimationActive = false;
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+}
+
+function renderAfterRestore() {
+    ctx.clearRect(0, 0, cW, cH);
+    renderAnswer();
+    renderButtons();
+    renderStats();
+    generateNextTurnDisplay();
+    statDraw(va, vb, vc, vd, ve, vf, vg, vh);
+    drawToggles();
+}
+    
 // ===========================================
 // RESTORE STATE
 // ===========================================
@@ -6215,196 +6254,230 @@ function loadGame() {
         const savedData = localStorage.getItem('mathsoccer_save');
         if (!savedData) {
             speakText("No saved game found");
+            va = ""; vb = ""; vc = "No saved game found.";
+            vd = ""; ve = ""; vf = ""; vg = "";
+            vh = (side === 0) ? 'red' : 'blue';
+            statDraw(va, vb, vc, vd, ve, vf, vg, vh);
             return false;
         }
-        
+
         const save = JSON.parse(savedData);
-        
+
         // ===========================================
-        // ✅ SIDE CHECK — Saved game must match current side
+        // ✅ SIDE CHECK — saved game must match current side
         // ===========================================
         if (save.side !== side) {
-            const savedColor = (save.side === 0) ? 'Red' : 'Blue';
-            const currentColor = (side === 0) ? 'Red' : 'Blue';
-            
+            const savedColor   = (save.side === 0) ? 'Red' : 'Blue';
+            const currentColor = (side === 0)     ? 'Red' : 'Blue';
             const msg = `No saved game for ${currentColor}. A saved game exists for ${savedColor}. Play ${savedColor} to access it.`;
-            
-            // Show message in the info panel
-            va = "";
-            vb = "";
+
+            va = ""; vb = "";
             vc = `No saved game for ${currentColor}.`;
             vd = `A saved game exists for ${savedColor}.`;
             ve = `Play ${savedColor} to access it.`;
-            vf = "";
-            vg = "";
+            vf = ""; vg = "";
             vh = (side === 0) ? 'red' : 'blue';
             statDraw(va, vb, vc, vd, ve, vf, vg, vh);
-            
+
             speakText(msg);
             console.log(`Load blocked: current side=${side}, saved side=${save.side}`);
             return false;
         }
-        
-        matchInProgress = false;
-        
-        // Cancel any ongoing timers/animations
-        if (timerCom) clearTimeout(timerCom);
-        if (animationFrameId) cancelAnimationFrame(animationFrameId);
-        if (pulseFrameId) cancelAnimationFrame(pulseFrameId);
-        if (calcAnimationFrameId) cancelAnimationFrame(calcAnimationFrameId);
-        
-        // Restore game state variables
-        r = save.r;
-        h = save.h;
-        g = save.g;
-        m = save.m;
-        n = save.n;
-        z = save.z;
-        side = save.side;
-        l = save.l;
-        k = save.k;
-        problemFactor = save.problemFactor;
-        redGoal = save.redGoal;
-        blueGoal = save.blueGoal;
-        redPoints = save.redPoints;
-        bluePoints = save.bluePoints;
-        redBefore = save.redBefore;
-        blueBefore = save.blueBefore;
-        
-        // Restore answer occupancy
+
+        // ===========================================
+        // ✅ FLUSH ALL PENDING TIMERS / ANIMATIONS FIRST
+        // ===========================================
+        if (timerCom)             { clearTimeout(timerCom);            timerCom = null; }
+        if (autoMoveTimer)        { clearTimeout(autoMoveTimer);       autoMoveTimer = null; }
+        if (animationFrameId)     { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
+        if (pulseFrameId)         { cancelAnimationFrame(pulseFrameId);      pulseFrameId = null; }
+        if (calcAnimationFrameId) { cancelAnimationFrame(calcAnimationFrameId); calcAnimationFrameId = null; }
+        if (settingsAnimationInterval) { clearInterval(settingsAnimationInterval); settingsAnimationInterval = null; }
+
+        realTimeouts.forEach(e => clearTimeout(e.id));
+        realTimeouts = [];
+
+        pendingDelays.forEach(e => clearTimeout(e.id));
+        pendingDelays = [];
+
+        // ===========================================
+        // ✅ RESET TRANSIENT FLAGS
+        // ===========================================
+        animationInProgress  = false;
+        touchEnabled         = true;
+        pulseAnimationActive = false;
+        calcAnimationActive  = false;
+        gameOverActive       = false;
+        gameOverSoundPlayed  = false;
+        window._moveExecuted = false;
+        matchInProgress      = false;
+        settingsVisible      = false;
+        settingsAnimating    = false;
+
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+        }
+        speechQueue = [];
+        isSpeaking  = false;
+
+        // ===========================================
+        // ✅ RESTORE GAME STATE
+        // ===========================================
+        r              = save.r;
+        h              = save.h;
+        g              = save.g;
+        m              = save.m;
+        n              = save.n;
+        z              = save.z;
+        side           = save.side;
+        l              = save.l;
+        k              = save.k;
+        problemFactor  = save.problemFactor;
+        redGoal        = save.redGoal;
+        blueGoal       = save.blueGoal;
+        redPoints      = save.redPoints;
+        bluePoints     = save.bluePoints;
+        redBefore      = save.redBefore;
+        blueBefore     = save.blueBefore;
+
+        // ---- Answer occupancy ----
         answer.forEach((cell, idx) => {
             if (save.answerOccupancy[idx] !== undefined) {
                 cell.occupancy = save.answerOccupancy[idx];
             }
         });
-        
-        // Restore button positions and colors
+
+        // ---- Button positions & colors & tags ----
         buttons.forEach((btn, idx) => {
-            if (save.buttonPositions[idx]) {
+            if (save.buttonPositions && save.buttonPositions[idx]) {
                 btn.x = save.buttonPositions[idx].x;
                 btn.y = save.buttonPositions[idx].y;
             }
-            if (save.buttonColors[idx]) {
+            if (save.buttonColors && save.buttonColors[idx]) {
                 btn.col = save.buttonColors[idx];
             }
+            if (save.buttonTags && save.buttonTags[idx] !== undefined) {
+                btn.tag = save.buttonTags[idx];
+            }
         });
-        
-        // Restore scorer
+
+        // ---- Scorers ----
         scorer.length = 0;
         if (save.scorerData) {
-            save.scorerData.forEach(g => {
+            save.scorerData.forEach(s => {
                 scorer.push({
-                    id: g.id,
-                    col: g.col,
-                    x: g.x,
-                    y: g.y,
-                    moveN: g.moveN
+                    id: s.id,
+                    col: s.col,
+                    x: s.x,
+                    y: s.y,
+                    moveN: s.moveN,
+                    assist: s.assist || null
                 });
             });
         }
-        
-        // ✅ Restore simplified lastMoveData
+
+        // ---- lastMoveData (rehydrate with real button/cell references) ----
         if (save.lastMoveData) {
-            const button = save.lastMoveData.button ? {
-                id: save.lastMoveData.button.id,
-                col: save.lastMoveData.button.col
-            } : null;
-            
-            const targetCell = save.lastMoveData.targetCell ? {
-                id: save.lastMoveData.targetCell.id
-            } : null;
-            
-            const sourceCell = save.lastMoveData.sourceCell ? {
-                id: save.lastMoveData.sourceCell.id
-            } : null;
-            
+            const savedBtn = save.lastMoveData.button
+                ? buttons.find(b => b.id === save.lastMoveData.button.id &&
+                                    b.col === save.lastMoveData.button.col)
+                : null;
+
+            const savedTarget = save.lastMoveData.targetCell
+                ? answer.find(c => c.id === save.lastMoveData.targetCell.id)
+                : null;
+
+            const savedSource = save.lastMoveData.sourceCell
+                ? answer.find(c => c.id === save.lastMoveData.sourceCell.id)
+                : null;
+
             lastMoveData = {
-                button: button,
-                targetCell: targetCell,
-                sourceCell: sourceCell,
+                button:     savedBtn,
+                targetCell: savedTarget,
+                sourceCell: savedSource,
                 chanceType: save.lastMoveData.chanceType,
-                points: save.lastMoveData.points,
-                moveTeam: save.lastMoveData.moveTeam,
-                nextTeam: save.lastMoveData.nextTeam
+                points:     save.lastMoveData.points,
+                moveTeam:   save.lastMoveData.moveTeam,
+                nextTeam:   save.lastMoveData.nextTeam
             };
         } else {
             lastMoveData = null;
         }
-        
-        // ✅ Restore scorer positions
+
+        // ---- Scorer anchors ----
         if (save.topX !== undefined) topX = save.topX;
         if (save.topY !== undefined) topY = save.topY;
         if (save.botX !== undefined) botX = save.botX;
         if (save.botY !== undefined) botY = save.botY;
-        
-        // ✅ Restore stats array values
+
+        // ---- Stats / calc ----
         if (save.statsValues) {
             save.statsValues.forEach((s, i) => {
                 if (i < stats.length) {
                     stats[i].value = s.value;
-                    if (s.col !== undefined) {
-                        stats[i].col = s.col;
-                    }
+                    if (s.col !== undefined) stats[i].col = s.col;
                 }
             });
         }
-        
-        // ✅ Restore calc value
-        if (save.calcValue !== undefined) {
-            calc.value = save.calcValue;
+        if (save.calcValue !== undefined) calc.value = save.calcValue;
+
+        // ---- Visible history ----
+        gameHistory = Array.isArray(save.gameHistory)
+            ? save.gameHistory.map(e => ({ ...e }))
+            : [];
+        historyPage = 0;
+
+        // ---- Decision snapshot ----
+        if (save.decisionSnapshot) {
+            decisionSnapshot = {
+                valid:    Array.isArray(save.decisionSnapshot.valid)    ? [...save.decisionSnapshot.valid]    : [],
+                safe:     Array.isArray(save.decisionSnapshot.safe)     ? [...save.decisionSnapshot.safe]     : [],
+                noGo:     Array.isArray(save.decisionSnapshot.noGo)     ? [...save.decisionSnapshot.noGo]     : [],
+                exemptButtons: Array.isArray(save.decisionSnapshot.exemptButtons)
+                    ? [...save.decisionSnapshot.exemptButtons] : []
+            };
+        } else {
+            decisionSnapshot = { valid: [], safe: [], noGo: [], exemptButtons: [] };
         }
-        
-        // Clear selections
-        selectedButton = null;
+
+        // ---- Clear selections ----
+        selectedButton      = null;
         selectedButtonLinks = [];
-        
-        // Stop animations
-        animationInProgress = false;
-        touchEnabled = true;
-        
-        // Stop speech
-        if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-        }
-        speechQueue = [];
-        isSpeaking = false;
-        
-        // Redraw everything
+
+        // ---- Reset move-history stack on load (safer than trying to rebuild it) ----
+        moveHistory = [];
+        currentHistoryIndex = -1;
+        saveGameState();   // seed with the freshly loaded state
+
+        // ===========================================
+        // ✅ RENDER (single pass — no duplicates)
+        // ===========================================
         ctx.clearRect(0, 0, cW, cH);
         renderAnswer();
         renderButtons();
         renderStats();
         drawToggles();
-        
-        // ✅ Regenerate statDraw info from lastMoveData
-        generateNextTurnDisplay();
-        statDraw(va, vb, vc, vd, ve, vf, vg, vh);
-        
-        const isRedTurn = (r % 2 !== 0);
+
+        // Build panel text
+        const isRedTurn   = (r % 2 !== 0);
         const currentTeam = isRedTurn ? 'red' : 'blue';
-        
+
         generateNextTurnDisplay();
-        statDraw(va, vb, vc, vd, ve, vf, vg, vh);
+        statDraw(va, vb, vc, vd, ve, vf, vg, vh);       
+
         speakText(`Game loaded. ${currentTeam}'s turn. Factor is ${problemFactor}`);
-        
+
         // ===========================================
-        // ✅ RESUME AI MOVE IF IT WAS AI'S TURN (h === 0)
+        // ✅ RE-ARM AI IF IT WAS AI'S TURN
         // ===========================================
-        if (save.h === 0) {
+        if (save.h === 0 && n < 28 && !gameOverActive) {
             console.log("Resuming AI move...");
-            
-            // Cancel any stale timer
-            if (timerCom) clearTimeout(timerCom);
-            
-            // Give speech time to finish, then let the AI move
-            timerCom = setTimeout(function() {
-                compMove();
-            }, 8000);
+            timerCom = setTimeout(compMove, 3000);
         }
-        
-        console.log("Game loaded from save");
+
+        console.log("Game loaded from save (v" + save.version + ")");
         return true;
-        
+
     } catch (e) {
         console.error("Load failed:", e);
         speakText("Failed to load saved game");
@@ -9040,7 +9113,7 @@ function drawBut(x, y, but,N) {
     // Assist provider — above the move number, smaller, team colour
 
 if(c===1){
-    ctx.fillStyle = but.col;
+    ctx.fillStyle = '#CFC';
     ctx.font = 'bold 11px fantasy, papyrus';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
@@ -15690,7 +15763,7 @@ landingPage.forEach((page) => {
             ctx.beginPath();
             ctx.arc(page.x + 14, page.y + 14, 45, 0, Math.PI * 2);
             ctx.fill();
-            
+                                   
             clearTimeout(window._landingPageTimeout);
             window._landingPageTimeout = setTimeout(function() {
                 g = 1;
@@ -15705,6 +15778,7 @@ loadAchievements();
                 renderLevels('red', 'Intermediate', 125, 687);
                 renderLevels('red', 'Advanced', 207, 687);
                 renderLevels('red', 'Genius', 289, 687);
+                speakText("choose a difficulty level here: beginner, intermediate, advanced or genius");
                 landingPageClickLock = false;
             }, 500);
             return;
@@ -15719,8 +15793,8 @@ loadAchievements();
             ctx.fillStyle = 'rgba(0,0,0,0.6)';
             ctx.beginPath();
             ctx.arc(page.x + 14, page.y + 14, 45, 0, Math.PI * 2);
-            ctx.fill();
-            
+            ctx.fill();          
+  
             clearTimeout(window._landingPageTimeout);
             window._landingPageTimeout = setTimeout(function() {
                 g = 1;
@@ -15735,6 +15809,7 @@ loadAchievements();
                 renderLevels('blue', 'Intermediate', 125, 687);
                 renderLevels('blue', 'Advanced', 207, 687);
                 renderLevels('blue', 'Genius', 289, 687);
+                speakText("choose a difficulty level here: beginner, intermediate, advanced or genius");
                 landingPageClickLock = false;
             }, 500);
             return;
