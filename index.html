@@ -10339,7 +10339,7 @@ statDraw(va,vb,vc,vd,ve,vf,vg,vh );
 }, Math.max(500, 8000 / gameSpeedMultiplier));
 }
 
-speakText(`factor is equal to ${problemFactor}`);
+//speakText(`factor is equal to ${problemFactor}`);
 r++;
 
         if (!matchInProgress) {  
@@ -14540,10 +14540,16 @@ function generateMove1DisplayData() {
     vf = "based on Princewill's ";
     vg = "law of imbalance.";
     vh = 'white';
+    if (!matchInProgress) {  
     speakText("Always read the Mathsoccer textbox for your best move options.");
+    }
+    
   const difficultyNames = ['genius', 'advanced', 'intermediate', 'beginner'];
 const currentDifficulty = difficultyNames[l] || 'genius';
+
+if (!matchInProgress) {  
 speakText(`Wait for your ${currentDifficulty} opponent to pass first`);
+}
 }
      
 // ===========================================
@@ -14817,7 +14823,7 @@ requestWakeLock();
     }, 1500);
     
     setTimeout(() => {
-        speakText(`let's watch a match between ${topColor} ${topDifficulty} and ${bottomColor} ${bottomDifficulty}. This match will end after 28 moves. Each move requires touching a token and one framed number.`);
+        speakText(`let's watch a match between ${topColor} ${topDifficulty} and ${bottomColor} ${bottomDifficulty}. Each move here requires touching a token and one framed number.`);
     }, 1500);
 }
 
