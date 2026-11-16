@@ -9503,71 +9503,72 @@ function startRestZone() {
 // ===========================================
 function generateNextTurnDisplay() {
 
-    // ----------------------------------------------------------
-    // DIFFICULTY LABEL
-    // ----------------------------------------------------------
+    const turnNumber = m;
     const difficultyNames = ['Genius', 'Advanced', 'Intermediate', 'Beginner'];
-    const diffName = difficultyNames[l] || 'Genius';
 
-    // ----------------------------------------------------------
-    // va — MOVE MADE (color + difficulty + token + from → to)
-    // ----------------------------------------------------------
-    
-    if (lastMoveData &&
-        lastMoveData.button) {
-const colorWord = lastMoveData.moveTeam === 'red' ? 'Red' : 'Blue';
-        const btn  = lastMoveData.button.id;
-        
-        va = `${colorWord} ${diffName} token ${btn} moved `;
-    } 
+    // ============================================================
+    // va / vb — SINGLE SOURCE
+    // Driven only by lastMoveData. Changes only when a new move
+    // updates lastMoveData. Independent of h, g, or l.
+    // ============================================================
+    if (lastMoveData && lastMoveData.button && lastMoveData.targetCell) {
 
-    // ----------------------------------------------------------
-    // vb — POINTS + CHANCE
-    // ----------------------------------------------------------
-    if (lastMoveData &&
-        lastMoveData.sourceCell &&
-        lastMoveData.targetCell &&
-        lastMoveData.button) {
-        const pts = lastMoveData.points || 0;
-        
-        const from = lastMoveData.sourceCell.id;
-        const to   = lastMoveData.targetCell.id;
+        const pts       = lastMoveData.points || 0;
+        const mover     = lastMoveData.moveTeam;                 // 'red' | 'blue'
+        const nTeam     = lastMoveData.nextTeam;
+        const from      = lastMoveData.sourceCell ? lastMoveData.sourceCell.id : '?';
+        const to        = lastMoveData.targetCell.id;
+        const btn       = lastMoveData.button.id;
+        const colorWord = (mover === 'red') ? 'Red' : 'Blue';
+
+        // Attach difficulty label only when the mover is the AI
+        const aiColor    = (side === 0) ? 'blue' : 'red';
+        const moverLabel = (mover === aiColor)
+            ? `${colorWord} ${difficultyNames[l] || 'Genius'}`
+            : `Your ${colorWord}`;
+
         let chance = 'No chance';
-        if (pts === 10)      chance = 'Goal';
+        if      (pts === 10) chance = 'Goal';
         else if (pts === 5)  chance = 'Full chance';
         else if (pts === 3)  chance = 'Half chance';
         else if (pts === 2)  chance = 'Block';
-        else                 chance = 'No chance';
 
-        vb = `from ${from} to ${to}. ${chance}. ${pts}pt${pts === 1 ? '' : 's'}.`;
-    } else {
-    const colorWord = lastMoveData.moveTeam === 'red' ? 'Red' : 'Blue';
-        vb = `${colorWord} ${diffName} starts.`;
+        va = `${moverLabel} token ${btn} moved from ${from} to ${to}.`;
+        vb = `${chance}. ${pts}pt${pts === 1 ? '' : 's'}. It's ${nTeam} turn ${turnNumber}.`;
     }
 
-    // ----------------------------------------------------------
-    // vc — DECISION LOOP TITLE
-    // ----------------------------------------------------------
-    vc = lastMoveData ? 'DECISION LOOP' : 'DECISION LOOP';
+    // ============================================================
+    // vc..vh — turn-dependent options panel
+    // Legitimately depends on whose turn is next (h === 1 → human).
+    // ============================================================
+    if (lastMoveData && h === 1 && g === 2) {
+        const nextTeam = lastMoveData.nextTeam;
 
-// ----------------------------------------------------------
-// SOURCE LISTS — from the snapshot taken at decision time
-// ----------------------------------------------------------
-const validList    = decisionSnapshot.valid;
-const safeList     = decisionSnapshot.safe;
-const noGoList     = decisionSnapshot.noGo;
-const exemptBtnIds = decisionSnapshot.exemptButtons;
+        if (typeof valAns === 'function') valAns();
 
-// ----------------------------------------------------------
-// Build display strings
-// ----------------------------------------------------------
-vd = `Linked numbers: ${validList.length ? validList.join(', ') : 'none'}`;
-ve = `Unsafe numbers: ${noGoList.length ? noGoList.join(', ') : 'none'}`;
-vg = `Busy tokens: ${exemptBtnIds.length ? exemptBtnIds.join(', ') : 'none'}`;
-vf = `Safe numbers: ${safeList.length ? safeList.join(', ') : 'none'}`;
+        const nextLinks  = generateLinksForTeam(nextTeam);
+        const formatLink = (id, arr) => arr.length > 0 ? `${id}(${arr.join(', ')})` : `${id}(no link)`;
 
-    // vh — team color for statDraw styling
-    vh = (lastMoveData && lastMoveData.moveTeam === 'red') ? 'red' : 'blue';
+        vc = `Valid ${nextTeam} links:`;
+        vd = formatLink('W', nextLinks.W);
+        ve = formatLink('X', nextLinks.X);
+        vf = formatLink('Y', nextLinks.Y);
+        vg = formatLink('Z', nextLinks.Z);
+        vh = nextTeam;
+    } else {
+        vc = 'DECISION LOOP';
+
+        const validList    = decisionSnapshot.valid;
+        const safeList     = decisionSnapshot.safe;
+        const noGoList     = decisionSnapshot.noGo;
+        const exemptBtnIds = decisionSnapshot.exemptButtons;
+
+        vd = `Linked numbers: ${validList.length ? validList.join(', ') : 'none'}`;
+        ve = `Unsafe numbers: ${noGoList.length ? noGoList.join(', ') : 'none'}`;
+        vg = `Busy tokens: ${exemptBtnIds.length ? exemptBtnIds.join(', ') : 'none'}`;
+        vf = `Safe numbers: ${safeList.length ? safeList.join(', ') : 'none'}`;
+        vh = (lastMoveData && lastMoveData.moveTeam === 'red') ? 'blue' : 'red';
+    }
 }
 
 
@@ -13164,7 +13165,6 @@ function makeMove() {
          (r % 2 !== 0 && compAns.col !== 'red' || r % 2 === 0 && compAns.col !== 'blue')) {
          
         sparkleBorderActive = true;
-        saveGameState();
         
         targetButton = compBut;
         targetAnswer = compAns;
@@ -13276,6 +13276,8 @@ gameSetTimeoutReal(() => {
                         moveTeam: compBut.col,
                         nextTeam: compBut.col === 'red' ? 'blue' : 'red'
                     };
+                    
+                    saveGameState();        
 
                     redBefore = redPoints;
                     blueBefore = bluePoints;
@@ -13295,7 +13297,8 @@ gameSetTimeoutReal(() => {
 
                     z = 0;
                     n++;
-                    if (n > 1 && n % 2 === 0) m++;
+                    if (n > 1 && n % 2 === 0) 
+//m++;
 
                     if (g === 2 || g === 15) {
                         moveManimation();
@@ -13304,7 +13307,7 @@ gameSetTimeoutReal(() => {
                             if (!matchInProgress) {
                                 h = 1;
                                 g = 2;
-                                handleButtonClick();
+                  gameSetTimeout(generateNextTurnDisplay,2000);              handleButtonClick();
                             }
                         });
                     } else {
@@ -14717,18 +14720,18 @@ function calculatePoints(isComputer) {
 // ===========================================
 function generateMove1DisplayData() {
     const isRedTurn = (r % 2 !== 0);
-    const currentTeam = isRedTurn ? 'red' : 'blue';
+    const currentTeam = isRedTurn ? 'blue' : 'red';
     const turnNumber = m;
     
 // Set global display variables - NO statDraw here!
-    vb = "is a balance simulation system ";
-    vc = "used to prevent access to circled home ";
-    vd = "territories and number 1 seat, while ";
-    ve = "aiming for the top number 1 seat, ";
+    vb = "is a balance simulation ";
+    vc = "system used to prevent access to ";
+    vd = "circled home territories, while ";
+    ve = "aiming for the top number 1, ";
     va = "MATHSOCCER";
     vf = "based on Princewill's ";
     vg = "law of imbalance.";
-    vh = 'white';
+    vh = currentTeam;
     if (!matchInProgress) {  
     speakText("Always read the Mathsoccer textbox for your best move options.");
     }
@@ -15885,7 +15888,7 @@ landingPage.forEach((page) => {
             
             clearTimeout(window._landingPageTimeout);
             window._landingPageTimeout = setTimeout(function() {
-                alert("Register feature is not available yet. Touch a red or blue token to play for free.");
+                alert("Register feature is not available yet. Touch AI match to watch or touch a red or blue token to play for free.");
                 showLandingPage();
                 landingPageClickLock = false;
             }, 500);
@@ -15904,7 +15907,7 @@ landingPage.forEach((page) => {
             
             clearTimeout(window._landingPageTimeout);
             window._landingPageTimeout = setTimeout(function() {
-                alert("Login feature is not available yet. Touch a red or blue token to play for free.");
+                alert("Login feature is not available yet. Touch AI match to watch or touch a red or blue token to play for free.");
                 showLandingPage();
                 landingPageClickLock = false;
             }, 500);
@@ -16117,7 +16120,8 @@ if (g === 15 && matchInProgress) {
             renderLevels('red', 'Intermediate', 125, 687);
             renderLevels('red', 'Advanced', 207, 687);
             renderLevels('red', 'Genius', 289, 687);
-            avaToggleLock = false;
+            speakText("choose a difficulty level here: beginner, intermediate, advanced or genius");
+           avaToggleLock = false;
         }, 500);
         
         return;
@@ -16161,7 +16165,8 @@ if (g === 15 && matchInProgress) {
             renderLevels('blue', 'Intermediate', 125, 687);
             renderLevels('blue', 'Advanced', 207, 687);
             renderLevels('blue', 'Genius', 289, 687);
-            avaToggleLock = false;
+       speakText("choose a difficulty level here: beginner, intermediate, advanced or genius");
+                avaToggleLock = false;
         }, 500);
         
         return;
@@ -17637,8 +17642,7 @@ function executeHumanMove(button, targetCell, currentTeam) {
     }
     
     sparkleBorderActive = true;
-    // ✅ Save current state before making the move
-    saveGameState();  // For undo
+    // ✅ Save current state before making the move    
     
     // Store for animation
     targetButton = button;
@@ -17679,6 +17683,8 @@ function executeHumanMove(button, targetCell, currentTeam) {
         moveTeam: button.col,
         nextTeam: currentTeam == 'red' ? 'blue' : 'red'
     };
+    
+    saveGameState();  // For undo
     
     redBefore = redPoints;
     blueBefore = bluePoints;
