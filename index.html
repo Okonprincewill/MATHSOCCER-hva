@@ -327,6 +327,44 @@ function waitForAnimation(isRunningFn, onDone) {
     poll();
 }
 
+function scaled(delayUnscaled) {
+    return Math.max(SCALED_FLOOR_MS, Math.round(delayUnscaled / gameSpeedMultiplier));
+}
+
+// ─────────────────────────────────────────────
+// gameSetTimeout — PURE DELAY timer
+// Re-arms cleanly on speed change because the callback has NOT started yet.
+// ─────────────────────────────────────────────
+function gameSetTimeout(callback, delayUnscaled) {
+    const entry = {
+        callback: callback,
+        originalDelay: delayUnscaled,   // UNSCALED ms
+        startTime: performance.now(),
+        id: null
+    };
+
+    const schedule = (delayMs) => {
+        entry.id = setTimeout(() => {
+            const idx = pendingDelays.indexOf(entry);
+            if (idx > -1) pendingDelays.splice(idx, 1);
+
+            if (gamePaused) {
+                // Freeze: put back into the pool with remaining unscaled time
+                const elapsed = performance.now() - entry.startTime;
+                entry.originalDelay = Math.max(0, entry.originalDelay - elapsed);
+                entry.startTime = performance.now();
+                pendingDelays.push(entry);
+                return;
+            }
+            callback();
+        }, delayMs);
+    };
+
+    schedule(scaled(delayUnscaled));
+    pendingDelays.push(entry);
+    return entry.id;
+}
+
 
 // Two separate pools:
 //   - pendingDelays: pure delays that CAN re-arm on speed change
@@ -4364,10 +4402,19 @@ function stopFireworks() {
 
 let gameOverSoundPlayed = false;
 
+let gameOverSequenceFired = false;
+
 function showGameOver() {
+    if (gameOverSequenceFired) {
+        console.log('[GAME-OVER] skipped — already fired');
+        gameOverActive = false;
+        return;
+    }
+    gameOverSequenceFired = true;
+    
 // In showGameOver(), after gameOverActive = true;
 releaseWakeLock();
-    if (soundEnabled && !gameOverSoundPlayed) {
+    if (soundEnabled && !gameOverSoundPlayed) {   
         playSound(inland);
         gameOverSoundPlayed = true;
     }
@@ -4378,20 +4425,13 @@ releaseWakeLock();
     if (timerCom) clearTimeout(timerCom);
     if (animationFrameId) cancelAnimationFrame(animationFrameId);
     if (pulseFrameId) cancelAnimationFrame(pulseFrameId);
-    if (calcAnimationFrameId) cancelAnimationFrame(calcAnimationFrameId);
-    
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-    }
-   recordGameStats();
-    checkAchievements();
+    if (calcAnimationFrameId) cancelAnimationFrame(calcAnimationFrameId);        
+   
     renderGameOverScreen();
     startFireworks();
-    // === ANNOUNCE THE RESULT ===
-    const result = announceGameOver();
-    // === ACHIEVEMENTS ===
-    renderAchievements();
-}
+// === ANNOUNCE THE RESULT ===
+   // const result = announceGameOver();
+    }
 
 // ===========================================
 // GAME OVER ANNOUNCEMENT
@@ -9436,6 +9476,28 @@ function showCalculationAnimation(calculationText, teamColor) {
     calcAnimationFrameId = requestAnimationFrame(animate);
 }
 
+let restZoneStartedForThisMove = false;
+
+function startRestZone() {
+    if (restZoneStartedForThisMove) return;
+    restZoneStartedForThisMove = true;
+
+    if (autoMoveTimer) {
+        clearTimeout(autoMoveTimer);
+        pendingDelays = pendingDelays.filter(e => e.id !== autoMoveTimer);
+        realTimeouts  = realTimeouts.filter(e => e.id !== autoMoveTimer);
+        autoMoveTimer = null;
+    }
+
+    if (matchInProgress && !gameOverActive) {
+        if (n > 28) {
+            gameSetTimeoutReal(endGameSequence, REST_MS + 2000);
+        } else {
+            autoMoveTimer = gameSetTimeoutReal(autoMove, REST_MS);
+        }
+    } 
+}
+
 // ===========================================
 // FIXED DISPLAY GENERATION WITH CAPITALIZATION
 // ===========================================
@@ -10104,6 +10166,7 @@ rebound = btn;
     }
 }
 
+if(n < 30){
 if (!matchInProgress) {  
 // === 10 POINTS (GOAL) - TOP PRIORITY ===
 if (pointsEarnedThisMove === 10) {
@@ -10178,7 +10241,7 @@ else if (pointsEarnedThisMove === 2) {
             speakText(`You blocked your ${opponentDifficulty} opponent's chance, but your opponents token ${rebound.id} has a chance to score now!`);
             }
             else{
-            speakText(`The chance is blocked, but the goal line is still unblocked and a goal will be scored now.`);
+            speakText(`The chance is blocked, but the goal line is still open and a goal will be scored now.`);
             }    
         } else {
         playSound(miss);
@@ -10196,7 +10259,7 @@ else if (pointsEarnedThisMove === 2) {
             speakText(`Your chance is blocked by your ${opponentDifficulty} opponent, but you have another chance to score now with token ${rebound.id}!`);
             }
             else{
-            speakText(`The chance is blocked, but the goal line is still unblocked and a goal will be scored now.`);
+            speakText(`The chance is blocked, but the goal line is still open and a goal will be scored now.`);
             }           
         } else {
         playSound(miss);
@@ -10215,26 +10278,26 @@ else if (pointsEarnedThisMove === 1) {
     if (targetButton.col === playerColor && goalLineExposed) {
     playSound(loud);       
          if (!matchInProgress) {    
-speakText(`You left the goal line unblocked. Your ${opponentDifficulty} opponents token ${rebound.id} is about to score now!`);
+speakText(`You left the goal line open. Your ${opponentDifficulty} opponents token ${rebound.id} is about to score now!`);
 }
 else{
-            speakText(`The goal line is left unblocked and a goal will be scored now.`);
+            speakText(`The goal line is left open and a goal will be scored now.`);
             }      
     } 
     
 else if (targetButton.col === opponentColor && goalLineExposed) {
 playSound(loud);        
 if (!matchInProgress) {    
-            speakText(`Your ${opponentDifficulty} opponent left the goal line unblocked. You are about to score now with your token ${rebound.id}!`);
+            speakText(`Your ${opponentDifficulty} opponent left the goal line open. You are about to score now with your token ${rebound.id}!`);
             }
             else{
-            speakText(`The goal line is left unblocked and a goal will be scored now.`);
-            }                       
+            speakText(`The goal line is left open and a goal will be scored now.`);
+            }            
+        }
     }
-}
 
-playSound(touch);        
-showCalculationAnimation(calc.value, moveTeam);      
+playSound(touch);
+    showCalculationAnimation(calc.value, moveTeam);   
 
     oldFac=problemFactor;
     
@@ -10244,9 +10307,18 @@ if (targetAnswer.id == 1) {
     const scoringTeam = moveTeam;
 
     if (matchInProgress) {
-        playSound(goal);
-        speakText(`It's a GOAL!!!`);
-    }
+    playSound(goal);
+    speakText(`It's a GOAL!!!`);
+
+    // ✅ Color difficulty letter scores
+    const redDifficulty  = (side === 0) ? aiDifficulty : playerDifficulty;
+    const blueDifficulty = (side === 0) ? playerDifficulty : aiDifficulty;
+    const scoringDiff  = (targetButton.col === 'red') ? redDifficulty  : blueDifficulty;
+    const scoringName  = difficultyNames[scoringDiff];
+    const scoringColor = capitalizeFirst(targetButton.col);
+
+    speakText(`${scoringColor} ${scoringName} ${targetButton.id} scores.`);
+}
 
     // Read the assist from gameHistory — the same team's previous move
     const assistLetter = findAssist(targetButton.col);
@@ -10304,26 +10376,18 @@ if (playerGoals > opponentGoals) {
 else{
 speakText("It's" + redGoal + "goal to " + blueGoal + " after " + (n-1) + " moves!");
 }
-   
-var resetTime = setTimeout(function(){ 
 
-if (!matchInProgress) { 
-if (n > 28) {
-        setTimeout(() => {              
-            showGameOver();       
-            clearTimeout(timerCom);
-            return;
-        }, 12000);
-   }
-      
-else{
+    var resetTime=gameSetTimeout(function(){
+
+if (!matchInProgress && n < 29) { 
+
     if (h == 0) {
         speakText("it's your opponent's turn to pass ");
-        var timerCom = setTimeout(compMove, 10000);
+        var timerCom = gameSetTimeout(compMove, 10000);
     } else if (h == 1) {     
         speakText("it's your turn to pass ");
     }
-}
+
 if (n < 29) {
      pass();
      playSound(welcome);         
@@ -10336,16 +10400,14 @@ generateNextTurnDisplay();
 statDraw(va,vb,vc,vd,ve,vf,vg,vh );  
 }
 }
-}, Math.max(500, 8000 / gameSpeedMultiplier));
+}, Math.max(500, 10000 / gameSpeedMultiplier));
 }
 
 //speakText(`factor is equal to ${problemFactor}`);
 r++;
-
-        if (!matchInProgress) {  
+       
     generateNextTurnDisplay();
     statDraw(va, vb, vc, vd, ve, vf, vg, vh);
-}
 
     // === COUNT CIRCLES AFTER ANIMATION ===
     // Use the targetButton from the current move
@@ -10360,15 +10422,80 @@ r++;
         }
     }
     
-if (n > 28 && !matchInProgress) {
-            setTimeout (() =>{
-        showGameOver();
-  clearTimeout(timerCom);
-        return;
-},8000);
-        }        
+}
+
+if (n > 28) {
+   
+if (!matchInProgress ) {
+gameSetTimeoutReal(showGameOver, REST_MS + 2000);
+gameSetTimeoutReal(announceGameOver, REST_MS + 2000);
+}
+else {
+gameSetTimeoutReal(endGameSequence, REST_MS + 2000);
+}
+}
 sparkleBorderActive = false;
 } 
+
+
+// ============================================================
+//  END GAME SEQUENCE (extracted from postAnim's old n>=29 branch)
+//  Game-over speech, game over screen, save result, guess summary.
+// ============================================================
+function endGameSequence() {
+    if (gameOverSequenceFired) return;
+const playerColor = (side === 0) ? 'red' : 'blue';
+    const aiColor = (side === 0) ? 'blue' : 'red';
+    
+       const difficultyNames = ['GENIUS', 'ADVANCED', 'INTERMEDIATE', 'BEGINNER'];
+                const redDifficulty  = (side === 0) ? aiDifficulty : playerDifficulty;
+                const blueDifficulty = (side === 0) ? playerDifficulty : aiDifficulty;
+                let winnerMessage = '';
+                
+                // Scorers
+    let playerScorersList = scorer.filter(g => g.col === playerColor).map(g => g.id).join(', ');
+    let aiScorersList = scorer.filter(g => g.col === aiColor).map(g => g.id).join(', ');
+    
+    let playerScorerText = playerScorersList ? `${playerColor} scorer: ${playerScorersList}` : `No ${playerColor} scorer`;
+    let aiScorerText = aiScorersList ? `${aiColor} scorer: ${aiScorersList}` : `No ${aiColor} scorer`;
+    
+                if (redGoal > blueGoal) {
+                    winnerMessage = `Red ${difficultyNames[redDifficulty]} won the game! `;
+                } else if (blueGoal > redGoal) {
+                    winnerMessage = `Blue ${difficultyNames[blueDifficulty]} won the game! `;
+                } else {
+                    winnerMessage = `It's a draw between Red ${difficultyNames[redDifficulty]} and Blue ${difficultyNames[blueDifficulty]}! `;
+                }
+                speakText(`This game is over. It's ${redGoal} goal to ${blueGoal} after ${n-1} moves! ${winnerMessage}. ${playerScorerText}. ${aiScorerText}.`);
+                
+                showGameOver();      
+const redDiffIdx  = (side === 0) ? aiDifficulty     : playerDifficulty;
+                const blueDiffIdx = (side === 0) ? playerDifficulty : aiDifficulty;
+                saveMatchResult(redDiffIdx, blueDiffIdx, redGoal, blueGoal, redPoints, bluePoints, correctGuesses, totalGuesses);
+
+                if (guessMode === 'guess' && totalGuesses > 0) {
+                    let summaryMsg;
+                    if (correctGuesses === 0) {
+                        va = ""; vb = "";
+                        vc = "You made no"; vd = "correct guesses,"; ve = "try better next time.";
+                        vf = ""; vg = ""; vh = 'white';
+                        summaryMsg = "You made no correct guesses, try better next time.";
+                    } else {
+                        va = ""; vb = "";
+                        vc = "You made " + correctGuesses + " correct";
+                        vd = "guesses."; ve = "Congratulations!";
+                        vf = ""; vg = ""; vh = 'white';
+                        summaryMsg = "You made " + correctGuesses + " correct guesses. Congratulations!";
+                    }
+
+                    ctx.clearRect(0, 0, cW, cH);
+                    renderAnswer();
+                    renderButtons();
+                    renderStats();
+                    statDraw(va, vb, vc, vd, ve, vf, vg, vh);
+                    speakText(summaryMsg);
+                }         
+}
 
 
 function categorizeButtonsByDirection(variableLocation) {
@@ -13679,6 +13806,68 @@ function halfChance() {
 }
 
 
+function recoveryMove() {
+    console.log("Move check:", "recoveryMove");
+    def = 1;
+    exDef = 1;
+    advAns = 1;
+    let foundButton = null;
+
+    const gameState = getGameState();
+    const { ownColor, opponentColor, positions, dir } = gameState;
+    const ownGoal = positions[3];
+
+    // Direction from the blocker back towards our own goal
+    const towardGoal = (dir === "up") ? "down" : "up";
+
+    // Last blocker = first button met going from our goal along the middle column
+    const goalDir = categorizeButtonsByDirection(ownGoal);
+    const lastBlocker = goalDir && goalDir[dir] && goalDir[dir][0];
+    if (!lastBlocker || lastBlocker.col !== ownColor) return false;
+
+    // Buttons sit at cell + 3, so convert the blocker back to its cell
+    const blockerCell = answer.find(c => c.x + 3 === lastBlocker.x && c.y + 3 === lastBlocker.y);
+    if (!blockerCell) return false;
+
+    // Unoccupied cells from the blocker towards our goal (goal excluded)
+    const cellsByDir = categorizeCellsByDirection(blockerCell);
+    const line = (cellsByDir[towardGoal] || []).filter(c => c !== ownGoal);
+    console.log("recoveryMove: cells between blocker and goal =", line.length);
+    if (line.length === 0 || line.length > 6) return false;
+
+    // Safe numbers (same list the switch-move based moves use)
+    let safeList = [];
+    try {
+        safeList = strictMove() || [];
+    } catch (e) {
+        console.warn("recoveryMove: strictMove failed", e);
+        return false;
+    }
+    const recoveryCells = line.filter(c => safeList.includes(c));
+    if (recoveryCells.length === 0) return false;
+
+    for (let cell of shuffleArray(recoveryCells)) {
+        compAns = cell;   // becomes compAns BEFORE searchDirections / whiteMove
+
+        if (compAns.col != 'white' || (compAns.col == 'white' && compAns.side === opponentColor)) {
+            foundButton = searchDirections();
+        } else if (compAns.col == 'white' && compAns.side === ownColor) {
+            foundButton = whiteMove();
+        }
+
+        if (foundButton) {
+            compBut = foundButton;
+            console.log("Choice button:", compBut.id);
+            console.log("Choice number:", compAns.id);
+            makeMove();
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
 // Shuffle function (Fisher-Yates algorithm)
 function shuffleArray(arr) {
   let newArr = [...arr]; // Create a copy to avoid modifying the original
@@ -14956,12 +15145,13 @@ l = isRedTurn ? redDifficulty : blueDifficulty;
     if (halfChance()) { afterAutoMove(); return; }
   
     if (l < 1) {
-        if (creativeMoveplus()) { afterAutoMove(); return; }
-        if (creativeMove()) { afterAutoMove(); return; }
-           }
+        if (recoveryMove()) { afterAutoMove(); return; }
+        if (creativeMoveplus()) { afterAutoMove(); return; }        
+         if (creativeMove()) { afterAutoMove(); return; }  
+        }
   
-    if (l < 2) {        
-        if (anysafeMoveplus()) { afterAutoMove(); return; }
+    if (l < 2) {      
+  if (anysafeMoveplus()) { afterAutoMove(); return; }
             }
     
     if (l < 3) {
@@ -17591,13 +17781,14 @@ function compMove() {
         
     // Genius level
     if (l < 1) {
+    if (recoveryMove()) { saveOpponentLogsToHistory(); return; }
         if (creativeMoveplus()) { saveOpponentLogsToHistory(); return; }
-        if (creativeMove()) { saveOpponentLogsToHistory(); return; }
-            }
+             if (creativeMove()) { saveOpponentLogsToHistory(); return; }
+         }
    
     // Advanced level
     if (l < 2) {        
-        if (anysafeMoveplus()) { saveOpponentLogsToHistory(); return; }
+      if (anysafeMoveplus()) { saveOpponentLogsToHistory(); return; }
             }
     
     // Intermediate level
